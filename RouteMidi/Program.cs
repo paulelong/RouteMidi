@@ -47,10 +47,10 @@ namespace RouteMidi
             {
 
                 GetMidiInfo();
-                
+                Console.WriteLine("Route Midi initialized.");
+                ListMidiInfo();
 
-
-                if (args.Length <= 0)
+                /*if (args.Length <= 0)
                 {
                     InputMidi.PrintMidiList(im);
                     OutputMidi.PrintMidiList(om);
@@ -58,7 +58,7 @@ namespace RouteMidi
                     Console.ReadKey();
                 }
                 else
-                {
+                {*/
                     if (ParseCommandLine(args))
                     {
                         //listener = new UdpClient(9000, AddressFamily.;
@@ -77,44 +77,46 @@ namespace RouteMidi
                             Console.WriteLine("Running ...");
 
                             ConsoleKeyInfo cki;
+                            bool StillRunning = true;
                             do
                             {
+                                Console.WriteLine();
                                 Console.Write("RouteMidi>> ");
                                 cki = Console.ReadKey();
-                                if(cki.Key != ConsoleKey.Escape)
+                                Console.WriteLine();
+                                Console.WriteLine();
+
+                                switch (cki.Key)
                                 {
-                                    Console.WriteLine();
-                                    Console.WriteLine();
-
-                                    switch (cki.Key)
-                                    {
-                                        case ConsoleKey.L:
-                                            InputMidi.PrintMidiList(im);
-                                            Console.WriteLine();
-                                            OutputMidi.PrintMidiList(om);
-                                            Console.WriteLine();
-                                            break;
-                                        case ConsoleKey.I:
-                                            InputMidi.PrintMidiList(im);
-                                            break;
-                                        case ConsoleKey.O:
-                                            OutputMidi.PrintMidiList(om);
-                                            break;
-                                        case ConsoleKey.P:
-                                            PrintRoutes();
-                                            break;
-                                        case ConsoleKey.A:
-                                            ManualAddRoute();
-                                            break;
-                                        case ConsoleKey.D:
-                                            ManualDeleteRoute();
-                                            break;
-                                        case ConsoleKey.S:
-
-                                            break;
-                                    }
+                                    case ConsoleKey.L:
+                                        ListMidiInfo();
+                                        break;
+                                    case ConsoleKey.I:
+                                        InputMidi.PrintMidiList(im);
+                                        break;
+                                    case ConsoleKey.O:
+                                        OutputMidi.PrintMidiList(om);
+                                        break;
+                                    case ConsoleKey.P:
+                                        PrintRoutes();
+                                        break;
+                                    case ConsoleKey.A:
+                                        ManualAddRoute();
+                                        break;
+                                    case ConsoleKey.D:
+                                        ManualDeleteRoute();
+                                        break;
+                                    //                                        case ConsoleKey.S:
+                                    //                                            break;
+                                    case ConsoleKey.Q:
+                                        StillRunning = false;
+                                        Console.WriteLine("Exiting");
+                                        break;
+                                    default:
+                                        Console.WriteLine("Not a valid command.");
+                                        break;
                                 }
-                            } while (cki.Key != ConsoleKey.Escape);
+                            } while (StillRunning);
 
                             Console.WriteLine("Stopping ...");
 
@@ -142,8 +144,16 @@ namespace RouteMidi
                     {
                         Console.WriteLine("Exiting due to command line syntax errors.");
                     }
-                }
+               // }
             }
+        }
+
+        private static void ListMidiInfo()
+        {
+            InputMidi.PrintMidiList(im);
+            Console.WriteLine();
+            OutputMidi.PrintMidiList(om);
+            Console.WriteLine();
         }
 
         private static void ManualDeleteRoute()
@@ -264,6 +274,12 @@ namespace RouteMidi
 
         private static void PrintRoutes()
         {
+            if(inMidiList.Count <= 0)
+            {
+                Console.WriteLine("No routes defined, use A to add a route.");
+                return;
+            }
+
             foreach(int i in inMidiList)
             {
                 List<int> outs = MidiRoutes[i].GetRoutes();
@@ -418,8 +434,6 @@ namespace RouteMidi
                                     OutputUdp2Midi.InitOutputDevice();
                                 };
                             }
-
-                            Console.WriteLine(rightside);
                         }
                         else
                         {
@@ -451,8 +465,6 @@ namespace RouteMidi
                                 MidiRoutes[InPort].AddRoute(OutPort, true);
                             }
                         }
-
-                        Console.WriteLine(leftside + " to " + rightside);
                     }
                 }
             }
@@ -466,14 +478,12 @@ namespace RouteMidi
             {
                 MidiInCaps caps = InputDevice.GetDeviceCapabilities(i);
                 im[i] = new InputMidi(caps.name, i);
-                Console.WriteLine("Init IN " + i.ToString() +"=" + caps.name);
             }
 
             for (int i = 0; i < OutputDevice.DeviceCount; i++)
             {
                 MidiOutCaps caps = OutputDevice.GetDeviceCapabilities(i);
                 om[i] = new OutputMidi(caps.name, i);
-                Console.WriteLine("Init OUT " + i.ToString() + "=" + caps.name);
             }
         }
 

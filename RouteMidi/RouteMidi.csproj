@@ -58,7 +58,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy "E:\Users\Paul\Documents\src\RouteMidi\RouteMidi\bin\Release\RouteMidi.exe" \\PAULYSSTUDIO7\Users\Paul\Documents\MyAppInstalls</PostBuildEvent>
+    <PostBuildEvent>copy "E:\Users\Paul\Documents\src\RouteMidi\RouteMidi\bin\Release\RouteMidi.exe" \\PAULYSSTUDIO7.\Users\Paul\Documents\MyAppInstalls</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

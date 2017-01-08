@@ -41,7 +41,7 @@ namespace RouteMidi
 
         public void PrintInfo()
         {
-            Console.WriteLine(id.ToString() + "-" + name);
+            Console.WriteLine(id.ToString() + " - " + name);
         }
 
         static public void PrintMidiList(InputMidi[] im)
@@ -49,6 +49,7 @@ namespace RouteMidi
             Console.WriteLine("Input Devices: ");
             for (int i = 0; i < InputDevice.DeviceCount; i++)
             {
+                Console.Write("  ");
                 im[i].PrintInfo();
             }
         }

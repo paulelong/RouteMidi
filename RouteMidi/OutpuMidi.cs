@@ -41,7 +41,7 @@ namespace RouteMidi
 
         public void PrintInfo()
         {
-            Console.WriteLine(id.ToString() + "-" + name);
+            Console.WriteLine(id.ToString() + " - " + name);
         }
 
         public string GetNameId()
@@ -54,6 +54,7 @@ namespace RouteMidi
             Console.WriteLine("Output Devices: ");
             for (int i = 0; i < OutputDevice.DeviceCount; i++)
             {
+                Console.Write("  ");
                 om[i].PrintInfo();
             }
         }
