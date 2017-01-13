@@ -6,7 +6,7 @@ using System.Threading;
 using System.Net;
 using System.Net.Sockets;
 //using System.Threading.Tasks;
-using Sanford.Multimedia;
+//using Sanford.Multimedia;
 using Sanford.Multimedia.Midi;
 using System.IO;
 
@@ -29,13 +29,14 @@ namespace RouteMidi
         static private SynchronizationContext context;
 
         // UDP Stuff
-        static UdpClient listener;
-        static UdpClient listenerIPv6;
+        static UdpClient ipv4_listener;
+        static UdpClient ipv6_listener;
         static AutoResetEvent waitHandle = new AutoResetEvent(false);
 
         // Global stuff
         static private bool debug = false;
         private static int UDPInPort = 9000;
+        static MidiConfig mc = new MidiConfig();
 
         static void Main(string[] args)
         {
@@ -50,102 +51,112 @@ namespace RouteMidi
                 Console.WriteLine("Route Midi initialized.");
                 ListMidiInfo();
 
-                /*if (args.Length <= 0)
+                if (ParseCommandLine(args))
                 {
-                    InputMidi.PrintMidiList(im);
-                    OutputMidi.PrintMidiList(om);
-                    Console.WriteLine("Press any key to continue:");
-                    Console.ReadKey();
-                }
-                else
-                {*/
-                    if (ParseCommandLine(args))
+                    ipv4_listener = new UdpClient(UDPInPort, AddressFamily.InterNetwork);
+                    ipv6_listener = new UdpClient(UDPInPort, AddressFamily.InterNetworkV6);
+
+                    if (InitMidiPorts())
                     {
-                        //listener = new UdpClient(9000, AddressFamily.;
-                        listener = new UdpClient(UDPInPort, AddressFamily.InterNetwork);
-                        listenerIPv6 = new UdpClient(UDPInPort, AddressFamily.InterNetworkV6);
+                        Thread ipv4_thread = new Thread(new ThreadStart(ipv4_udpListener));
+                        Thread ipv6_thread = new Thread(new ThreadStart(ipv6_udpListener));
 
-                        if (InitMidiPorts())
-                        {
-                            Thread t = new Thread(new ThreadStart(UdpListener));
-                            Thread t2 = new Thread(new ThreadStart(UdpListenerIPv6));
-                            t.Start();
-                            t2.Start();
+                        ipv4_thread.Start();
+                        ipv6_thread.Start();
 
-                            StartAllRecording();
+                        StartAllRecording();
 
-                            Console.WriteLine("Running ...");
+                        ProcessCommands();
 
-                            ConsoleKeyInfo cki;
-                            bool StillRunning = true;
-                            do
-                            {
-                                Console.WriteLine();
-                                Console.Write("RouteMidi>> ");
-                                cki = Console.ReadKey();
-                                Console.WriteLine();
-                                Console.WriteLine();
+                        Console.WriteLine("Stopping Midi...");
 
-                                switch (cki.Key)
-                                {
-                                    case ConsoleKey.L:
-                                        ListMidiInfo();
-                                        break;
-                                    case ConsoleKey.I:
-                                        InputMidi.PrintMidiList(im);
-                                        break;
-                                    case ConsoleKey.O:
-                                        OutputMidi.PrintMidiList(om);
-                                        break;
-                                    case ConsoleKey.P:
-                                        PrintRoutes();
-                                        break;
-                                    case ConsoleKey.A:
-                                        ManualAddRoute();
-                                        break;
-                                    case ConsoleKey.D:
-                                        ManualDeleteRoute();
-                                        break;
-                                    //                                        case ConsoleKey.S:
-                                    //                                            break;
-                                    case ConsoleKey.Q:
-                                        StillRunning = false;
-                                        Console.WriteLine("Exiting");
-                                        break;
-                                    default:
-                                        Console.WriteLine("Not a valid command.");
-                                        break;
-                                }
-                            } while (StillRunning);
+                        StopAllRecording();
 
-                            Console.WriteLine("Stopping ...");
+                        Console.WriteLine("Midi Stopped ...");
 
-                            StopAllRecording();
+                        OutputUdp2Midi.Close();
+                        CloseAllMidiPorts();
 
-                            Console.WriteLine("Stopped ...");
+                        ipv4_thread.Abort();
+                        ipv6_thread.Abort();
 
-                            OutputUdp2Midi.Close();
-                            CloseAllMidiPorts();
-
-                            t.Abort();
-                            t2.Abort();
-
-                            listener.Close();
-                            listenerIPv6.Close();
-                            // http://stackoverflow.com/questions/1764898/how-do-i-safely-stop-a-c-sharp-net-thread-running-in-a-windows-service
-                            // http://stackoverflow.com/questions/14860613/how-to-use-asynchronous-receive-for-udpclient-in-a-loop
-                        }
-                        else
-                        {
-                            Console.WriteLine("Error initalizing midi ports");
-                        }
+                        ipv4_listener.Close();
+                        ipv6_listener.Close();
+                        // http://stackoverflow.com/questions/1764898/how-do-i-safely-stop-a-c-sharp-net-thread-running-in-a-windows-service
+                        // http://stackoverflow.com/questions/14860613/how-to-use-asynchronous-receive-for-udpclient-in-a-loop
                     }
                     else
                     {
-                        Console.WriteLine("Exiting due to command line syntax errors.");
+                        Console.WriteLine("Error initalizing midi ports");
                     }
-               // }
+                }
+                else
+                {
+                    Console.WriteLine("Exiting due to command line syntax errors.");
+                }
             }
+        }
+
+        private static void ProcessCommands()
+        {
+            ConsoleKeyInfo cki;
+            bool StillRunning = true;
+
+            do
+            {
+                Console.WriteLine();
+                Console.Write("RouteMidi>> ");
+                cki = Console.ReadKey();
+                Console.WriteLine();
+                Console.WriteLine();
+
+                switch (cki.Key)
+                {
+                    case ConsoleKey.B:
+                        ListMidiInfo();
+                        break;
+                    case ConsoleKey.I:
+                        InputMidi.PrintMidiList(im);
+                        break;
+                    case ConsoleKey.O:
+                        OutputMidi.PrintMidiList(om);
+                        break;
+                    case ConsoleKey.R:
+                        PrintRoutes();
+                        break;
+                    case ConsoleKey.A:
+                        ManualAddRoute();
+                        break;
+                    case ConsoleKey.D:
+                        ManualDeleteRoute();
+                        break;
+                    case ConsoleKey.S:
+                        SaveConfig();
+                        break;
+                    case ConsoleKey.L:
+                        LoadConfig();
+                        break;
+                    case ConsoleKey.Q:
+                        StillRunning = false;
+                        Console.WriteLine("Exiting");
+                        break;
+                    default:
+                        Console.WriteLine("Not a valid command.");
+                        break;
+                }
+            } while (StillRunning);
+        }
+
+        private static void SaveConfig()
+        {
+            mc.WriteRouteConfig(MidiRoutes, im, om);
+            mc.Save();
+        }
+
+        private static void LoadConfig()
+        {
+            mc.Load();
+            mc.ReadRouteConfig(MidiRoutes, im, om);
         }
 
         private static void ListMidiInfo()
@@ -588,7 +599,7 @@ namespace RouteMidi
             }
         }
 
-        static private void UdpListener()
+        static private void ipv4_udpListener()
         {
             //IPEndPoint object will allow us to read datagrams sent from any source.
             IPEndPoint RemoteIpEndPoint = new IPEndPoint(IPAddress.Any, 0);
@@ -598,7 +609,7 @@ namespace RouteMidi
             {
                 //listener.
                 // Blocks until a message returns on this socket from a remote host.
-                Byte[] receiveBytes = listener.Receive(ref RemoteIpEndPoint);
+                Byte[] receiveBytes = ipv4_listener.Receive(ref RemoteIpEndPoint);
                 if(receiveBytes.Length >= 0)
                 {
                     ProcessBytes(receiveBytes);
@@ -606,7 +617,7 @@ namespace RouteMidi
             }
         }
 
-        static private void UdpListenerIPv6()
+        static private void ipv6_udpListener()
         {
             //IPEndPoint object will allow us to read datagrams sent from any source.
             IPEndPoint RemoteIpEndPoint = new IPEndPoint(IPAddress.Any, 0);
@@ -616,7 +627,7 @@ namespace RouteMidi
             {
                 //listener.
                 // Blocks until a message returns on this socket from a remote host.
-                Byte[] receiveBytes = listenerIPv6.Receive(ref RemoteIpEndPoint);
+                Byte[] receiveBytes = ipv6_listener.Receive(ref RemoteIpEndPoint);
                 if (receiveBytes.Length >= 0)
                 {
                     ProcessBytes(receiveBytes);

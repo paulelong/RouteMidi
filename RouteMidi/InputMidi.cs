@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Sanford.Multimedia;
+//using Sanford.Multimedia;
 using Sanford.Multimedia.Midi;
 
 namespace RouteMidi
 {
-    class InputMidi
+    public class InputMidi
     {
         public InputDevice inMIDI = null;
         public int id;
@@ -39,9 +39,17 @@ namespace RouteMidi
             }
         }
 
+        public static int Count
+        {
+            get
+            {
+                return InputDevice.DeviceCount;
+            }
+        }
+
         public void PrintInfo()
         {
-            Console.WriteLine(id.ToString() + " - " + name);
+            Console.WriteLine("{0:##} - {1}", id.ToString(), name);
         }
 
         static public void PrintMidiList(InputMidi[] im)
@@ -53,6 +61,7 @@ namespace RouteMidi
                 im[i].PrintInfo();
             }
         }
+
         public string GetNameId()
         {
             return name;

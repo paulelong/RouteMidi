@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Sanford.Multimedia;
+//using Sanford.Multimedia;
 using Sanford.Multimedia.Midi;
 
 namespace RouteMidi
 {
-    class Routes
+    public class Routes
     {
         private bool all;
         private List<int> outMidiList = new List<int>();
