@@ -37,6 +37,7 @@ namespace RouteMidi
         static private bool debug = false;
         private static int UDPInPort = 9000;
         static MidiConfig mc = new MidiConfig();
+        static string CurrentConfigurationName;
 
         static void Main(string[] args)
         {
@@ -46,13 +47,14 @@ namespace RouteMidi
             }
             else
             {
-
                 GetMidiInfo();
                 Console.WriteLine("Route Midi initialized.");
                 ListMidiInfo();
 
                 if (ParseCommandLine(args))
                 {
+                    mc.Load();
+
                     ipv4_listener = new UdpClient(UDPInPort, AddressFamily.InterNetwork);
                     ipv6_listener = new UdpClient(UDPInPort, AddressFamily.InterNetworkV6);
 
@@ -136,6 +138,15 @@ namespace RouteMidi
                     case ConsoleKey.L:
                         LoadConfig();
                         break;
+                    case ConsoleKey.N:
+                        NewConfgiruation();
+                        break;
+                    case ConsoleKey.P:
+                        PickConfiguration();
+                        break;
+                    case ConsoleKey.C:
+                        DisplayConfigurations();
+                        break;
                     case ConsoleKey.Q:
                         StillRunning = false;
                         Console.WriteLine("Exiting");
@@ -147,16 +158,55 @@ namespace RouteMidi
             } while (StillRunning);
         }
 
+        private static void DisplayConfigurations()
+        {
+            mc.DisplayConfigurations();
+        }
+
+        private static void PickConfiguration()
+        {
+            DisplayConfigurations();
+            Console.Write("Pick which configuration: ");
+            string in_str = Console.ReadLine();
+            int confignum;
+
+            if (!int.TryParse(in_str, out confignum) || confignum < 0 || confignum >= MidiRoutes.Length)
+            {
+                Console.WriteLine("Port needs to be an integer and in the valid range of routes above.");
+                return;
+            }
+
+            mc.ReadRouteConfigByNumber(confignum, MidiRoutes, im, om);
+        }
+
+        private static void NewConfgiruation()
+        {
+            Console.Write("Configuraiton Name: ");
+            string in_str = Console.ReadLine();
+            if (mc.ConfigExists(in_str))
+            {
+                CurrentConfigurationName = in_str;
+                foreach(Routes r in MidiRoutes)
+                {
+                    r.RemoveRoutes();
+                }
+            }
+            else
+            {
+                Console.WriteLine("{1} is already defined, use another name.", in_str);
+            }         
+        }
+
         private static void SaveConfig()
         {
-            mc.WriteRouteConfig(MidiRoutes, im, om);
+            mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
             mc.Save();
         }
 
         private static void LoadConfig()
         {
             mc.Load();
-            mc.ReadRouteConfig(MidiRoutes, im, om);
+            mc.ReadDefaultConfig(MidiRoutes, im, om);
         }
 
         private static void ListMidiInfo()
