@@ -23,9 +23,11 @@ namespace RouteMidi
          
         public void Save()
         {
+            System.Xml.Serialization.XmlSerializer xsdefaultConfig = new System.Xml.Serialization.XmlSerializer(typeof(string));
             System.Xml.Serialization.XmlSerializer xs = new System.Xml.Serialization.XmlSerializer(typeof(List<MidiConfigurationsSchema>));
             using (StreamWriter writer = File.CreateText("RouteMidiConfig.cfg"))
             {
+                xsdefaultConfig.Serialize(writer, defaultConfiguration);
                 xs.Serialize(writer, Configurations);
             }
         }
@@ -33,58 +35,104 @@ namespace RouteMidi
         public void Load()
         {
 
+            System.Xml.Serialization.XmlSerializer xsdefaultConfig = new System.Xml.Serialization.XmlSerializer(typeof(string));
             System.Xml.Serialization.XmlSerializer xs = new System.Xml.Serialization.XmlSerializer(typeof(List<MidiConfigurationsSchema>));
-            using (StreamReader reader = File.OpenText("RouteMidiConfig.cfg"))
+            try
             {
-                try
+                using (StreamReader reader = File.OpenText("RouteMidiConfig.cfg"))
                 {
+                    defaultConfiguration = xsdefaultConfig.Deserialize(reader) as string;
                     Configurations = xs.Deserialize(reader) as List<MidiConfigurationsSchema>;
                 }
-                catch(Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
             }
         }
 
         public void ReadRouteConfig(string Name, Routes[] outroutes, InputMidi[] im, OutputMidi[] om)
         {
             MidiConfigurationsSchema record = Configurations.Find(r => r.ConfigurationName == Name);
-            ReadRouteRecord(record, outroutes, im, om);
+            if (record != null)
+            {
+                ReadRouteRecord(record, outroutes, im, om);
+            }
+            else
+            {
+                Console.WriteLine("Unable to find config {0}", Name);
+            }
+        }
+
+        public void ReadRouteConfigDefault(Routes[] outroutes, InputMidi[] im, OutputMidi[] om)
+        {
+            MidiConfigurationsSchema record = Configurations.Find(r => r.ConfigurationName == defaultConfiguration);
+            if(record != null)
+            {
+                ReadRouteRecord(record, outroutes, im, om);
+            }
+            else
+            {
+                Console.WriteLine("Unable to find config {0}", defaultConfiguration);
+            }
         }
 
         public void ReadRouteConfigByNumber(int number, Routes[] outroutes, InputMidi[] im, OutputMidi[] om)
         {
-            MidiConfigurationsSchema record = Configurations[number - 1];
-            ReadRouteRecord(record, outroutes, im, om);
+            if(number < Configurations.Count && number >= 1)
+            {
+                MidiConfigurationsSchema record = Configurations[number - 1];
+                if (record != null)
+                {
+                    ReadRouteRecord(record, outroutes, im, om);
+                }
+                else
+                {
+                    Console.WriteLine("Unable to find config number {0}", number);
+                }
+            }
+            else
+            {
+                Console.WriteLine("Configuraiton number out of range");
+            }
         }
 
         private void ReadRouteRecord(MidiConfigurationsSchema record, Routes[] outroutes, InputMidi[] im, OutputMidi[] om)
         {
             for (int n = 0; n < record.InPorts.Count; n++)
             {
-                outroutes[n].RemoveRoutes();
-                // check if the input is available now
-                int inport = InputMidi.MapName(im, record.InPorts[n]);
-                if (inport >= 0)
+                if(outroutes[n] != null)
                 {
-                    foreach (int i in record.Routes[n])
+                    outroutes[n].RemoveRoutes();
+                    // check if the input is available now
+                    int inport = InputMidi.MapName(im, record.InPorts[n]);
+                    if (inport >= 0)
                     {
-                        int outport = OutputMidi.MapName(om, record.OutPorts[i]);
-                        if (outport >= 0)
+                        if(record.Routes.Count > 0)
                         {
-                            outroutes[inport].AddRoute(outport, true);
+                            foreach (int i in record.Routes[n])
+                            {
+                                int outport = OutputMidi.MapName(om, record.OutPorts[i]);
+                                if (outport >= 0)
+                                {
+                                    outroutes[inport].AddRoute(outport, true);
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Could not find outport {0} in current midi setup.", record.OutPorts[i]);
+                                }
+
+                            }
                         }
                         else
                         {
-                            Console.WriteLine("Could not find outport {1} in current midi setup.", record.OutPorts[i]);
+                            Console.WriteLine("No routes in configuration");
                         }
-
                     }
-                }
-                else
-                {
-                    Console.WriteLine("Unalble to load configuration because {1} doesn't exist in current MIDI setup.", record.InPorts[n]);
+                    else
+                    {
+                        Console.WriteLine("Unalble to load configuration because {0} doesn't exist in current MIDI setup.", record.InPorts[n]);
+                    }
                 }
             }
         }
@@ -95,7 +143,7 @@ namespace RouteMidi
             if(record == null)
             {
                 record = new MidiConfigurationsSchema();
-                Configurations.Add(record);
+                record.ConfigurationName = Name;
             }
 
             for (int n = 0; n < InputMidi.Count; n++)
@@ -111,12 +159,16 @@ namespace RouteMidi
             for (int n = 0; n < InputMidi.Count; n++)
             {
                 List<int> rts = new List<int>();
-                foreach (int m in inroutes[n].GetRoutes())
+                if(inroutes[n] != null)
                 {
-                    rts.Add(m);
+                    foreach (int m in inroutes[n].GetRoutes())
+                    {
+                        rts.Add(m);
+                    }
+                    record.Routes.Add(rts);
                 }
-                record.Routes.Add(rts);
             }
+            Configurations.Add(record);
         }
 
         internal bool ConfigExists(string Name)
@@ -134,7 +186,7 @@ namespace RouteMidi
             int n = 1;
             foreach(MidiConfigurationsSchema r in Configurations)
             {
-                Console.WriteLine("{2} - {1}", r.ConfigurationName, n++);
+                Console.WriteLine("{1} - {0}", r.ConfigurationName, n++);
             }
         }
 

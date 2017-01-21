@@ -37,7 +37,7 @@ namespace RouteMidi
         static private bool debug = false;
         private static int UDPInPort = 9000;
         static MidiConfig mc = new MidiConfig();
-        static string CurrentConfigurationName;
+        static string CurrentConfigurationName = "default";
 
         static void Main(string[] args)
         {
@@ -54,6 +54,7 @@ namespace RouteMidi
                 if (ParseCommandLine(args))
                 {
                     mc.Load();
+                    mc.ReadRouteConfigDefault(MidiRoutes, im, om);
 
                     ipv4_listener = new UdpClient(UDPInPort, AddressFamily.InterNetwork);
                     ipv6_listener = new UdpClient(UDPInPort, AddressFamily.InterNetworkV6);
@@ -147,15 +148,51 @@ namespace RouteMidi
                     case ConsoleKey.C:
                         DisplayConfigurations();
                         break;
+                    case ConsoleKey.U:
+                        UpdateConfigurationName();
+                        break;
                     case ConsoleKey.Q:
                         StillRunning = false;
                         Console.WriteLine("Exiting");
                         break;
                     default:
+                        switch(cki.KeyChar)
+                        {
+                        case '?':
+                            ShowHelp();
+                            break;
+                        }
                         Console.WriteLine("Not a valid command.");
                         break;
                 }
             } while (StillRunning);
+        }
+
+        private static void UpdateConfigurationName()
+        {
+            Console.WriteLine("Current name is {0}", CurrentConfigurationName);
+            Console.Write("New name: ");
+            CurrentConfigurationName = Console.ReadLine();
+        }
+
+        private static void ShowHelp()
+        {
+            Console.WriteLine("Commands");
+            Console.WriteLine("Midi Info:");
+            Console.WriteLine(" I - Show Input Routes");
+            Console.WriteLine(" O - Show Output Routes");
+            Console.WriteLine(" B - Show Both In/Out Routes");
+            Console.WriteLine("Routes:");
+            Console.WriteLine(" A - Add Route");
+            Console.WriteLine(" D - Delete Route");
+            Console.WriteLine(" R - Show Route");
+            Console.WriteLine("Configurations:");
+            Console.WriteLine(" C - Show Configurations");
+            Console.WriteLine(" N - New Configuration");
+            Console.WriteLine(" P - Pick Configuration");
+            Console.WriteLine(" S - Save all Configurations");
+            Console.WriteLine(" L - Load all Configuration");
+            Console.WriteLine(" U - Update Configuraiton Name");
         }
 
         private static void DisplayConfigurations()
@@ -181,26 +218,40 @@ namespace RouteMidi
 
         private static void NewConfgiruation()
         {
+            mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
+
             Console.Write("Configuraiton Name: ");
             string in_str = Console.ReadLine();
-            if (mc.ConfigExists(in_str))
+            if (!mc.ConfigExists(in_str))
             {
                 CurrentConfigurationName = in_str;
                 foreach(Routes r in MidiRoutes)
                 {
-                    r.RemoveRoutes();
+                    if(r != null)
+                    {
+                        r.RemoveRoutes();
+                    }
                 }
+
+                mc.WriteRouteConfig(in_str, MidiRoutes, im, om);
             }
             else
             {
-                Console.WriteLine("{1} is already defined, use another name.", in_str);
+                Console.WriteLine("{0} is already defined, use another name.", in_str);
             }         
         }
 
         private static void SaveConfig()
         {
-            mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
-            mc.Save();
+            if(CurrentConfigurationName != "")
+            {
+                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
+                mc.Save();
+            }
+            else
+            {
+                Console.WriteLine("No configuraiton defined.");
+            }
         }
 
         private static void LoadConfig()
