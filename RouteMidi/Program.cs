@@ -14,12 +14,11 @@ namespace RouteMidi
 {
     class Program
     {
+        const int MINMIDIPORT = 1025;
         const uint MAXMIDIPORTS = 64;
 
         static private InputMidi[] im = new InputMidi[MAXMIDIPORTS];
         static private OutputMidi[] om = new OutputMidi[MAXMIDIPORTS];
-
-        static private OutputMidi OutputUdp2Midi;
 
         static private Routes[] MidiRoutes = new Routes[MAXMIDIPORTS];
 
@@ -29,15 +28,15 @@ namespace RouteMidi
         static private SynchronizationContext context;
 
         // UDP Stuff
-        static UdpClient ipv4_listener;
-        static UdpClient ipv6_listener;
-        static AutoResetEvent waitHandle = new AutoResetEvent(false);
+        static List<UDPMidiPort> ump = new List<UDPMidiPort>();
+
+ //       private static int UDPInPort = 9000;
 
         // Global stuff
         static private bool debug = false;
-        private static int UDPInPort = 9000;
         static MidiConfig mc = new MidiConfig();
         static string CurrentConfigurationName = "default";
+        private static bool dirty = false;
 
         static void Main(string[] args)
         {
@@ -56,17 +55,8 @@ namespace RouteMidi
                     mc.Load();
                     mc.ReadRouteConfigDefault(MidiRoutes, im, om);
 
-                    ipv4_listener = new UdpClient(UDPInPort, AddressFamily.InterNetwork);
-                    ipv6_listener = new UdpClient(UDPInPort, AddressFamily.InterNetworkV6);
-
                     if (InitMidiPorts())
                     {
-                        Thread ipv4_thread = new Thread(new ThreadStart(ipv4_udpListener));
-                        Thread ipv6_thread = new Thread(new ThreadStart(ipv6_udpListener));
-
-                        ipv4_thread.Start();
-                        ipv6_thread.Start();
-
                         StartAllRecording();
 
                         ProcessCommands();
@@ -77,16 +67,12 @@ namespace RouteMidi
 
                         Console.WriteLine("Midi Stopped ...");
 
-                        OutputUdp2Midi.Close();
                         CloseAllMidiPorts();
 
-                        ipv4_thread.Abort();
-                        ipv6_thread.Abort();
-
-                        ipv4_listener.Close();
-                        ipv6_listener.Close();
-                        // http://stackoverflow.com/questions/1764898/how-do-i-safely-stop-a-c-sharp-net-thread-running-in-a-windows-service
-                        // http://stackoverflow.com/questions/14860613/how-to-use-asynchronous-receive-for-udpclient-in-a-loop
+                        foreach (UDPMidiPort u in ump)
+                        {
+                            u.StopListeners();
+                        }
                     }
                     else
                     {
@@ -155,6 +141,9 @@ namespace RouteMidi
                         StillRunning = false;
                         Console.WriteLine("Exiting");
                         break;
+                    case ConsoleKey.M:
+                        SwapDebugMode();
+                        break;
                     default:
                         switch(cki.KeyChar)
                         {
@@ -166,6 +155,20 @@ namespace RouteMidi
                         break;
                 }
             } while (StillRunning);
+        }
+
+        private static void SwapDebugMode()
+        {
+            if (debug)
+            {
+                Console.WriteLine("Monitor debug mode off");
+                debug = false;
+            }
+            else
+            {
+                Console.WriteLine("Monitor debug mode on");
+                debug = true;
+            }
         }
 
         private static void UpdateConfigurationName()
@@ -193,6 +196,8 @@ namespace RouteMidi
             Console.WriteLine(" S - Save all Configurations");
             Console.WriteLine(" L - Load all Configuration");
             Console.WriteLine(" U - Update Configuraiton Name");
+            Console.WriteLine("Other:");
+            Console.WriteLine(" M - Monitor Messages");
         }
 
         private static void DisplayConfigurations()
@@ -218,7 +223,11 @@ namespace RouteMidi
 
         private static void NewConfgiruation()
         {
-            mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
+            if(dirty)
+            {
+                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
+                dirty = false;
+            }
 
             Console.Write("Configuraiton Name: ");
             string in_str = Console.ReadLine();
@@ -247,10 +256,11 @@ namespace RouteMidi
             {
                 mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
                 mc.Save();
+                dirty = false;
             }
             else
             {
-                Console.WriteLine("No configuraiton defined.");
+                Console.WriteLine("No configuraiton name defined.");
             }
         }
 
@@ -319,11 +329,12 @@ namespace RouteMidi
             try
             {
                 context = SynchronizationContext.Current;
-
-                foreach (int i in inMidiList)
+                /*
+                //foreach (int i in inMidiList)
+                for(int i = 0; i < InputMidi.Count; i++)
                 {
                     im[i].InitInputDevice();
-                    if (MidiRoutes[i].AllRoutes)
+                    //if (MidiRoutes[i].AllRoutes)
                     {
                         im[i].inMIDI.SysCommonMessageReceived += HandleSysCommonMessageReceived;
                         im[i].inMIDI.ChannelMessageReceived += HandleChannelMessageReceived;
@@ -333,10 +344,12 @@ namespace RouteMidi
                     }
                 }
 
-                foreach (int i in outMidiList)
+                //                foreach (int i in outMidiList)
+                for (int i = 0; i < OutputMidi.Count; i++)
                 {
                     om[i].InitOutputDevice();
                 }
+                */
                 return true;
             }
             catch (Exception ex)
@@ -367,29 +380,72 @@ namespace RouteMidi
                 return;
             }
 
-            if (!inMidiList.Contains(inport))
+            if(inport >= InputMidi.Count && inport < MINMIDIPORT)
             {
-                inMidiList.Add(inport);
+                Console.WriteLine("No a valid in midi port");
+                return;
             }
 
+            if (outport >= OutputMidi.Count)
+            {
+                Console.WriteLine("No a valid out midi port");
+                return;
+            }
+
+            AddRoute(inport, outport);
+        }
+
+        private static void AddRoute(int inport, int outport)
+        {
             if (!outMidiList.Contains(outport))
             {
                 outMidiList.Add(outport);
+                om[outport].InitOutputDevice();
             }
 
-            if (MidiRoutes[inport] == null)
+            if (inport > MINMIDIPORT)
             {
-                MidiRoutes[inport] = new Routes();
+                MidiOutCaps caps = OutputDevice.GetDeviceCapabilities(outport);                
+
+                ump = new UDPMidiPort(inport, om[outport]);
             }
-            MidiRoutes[inport].AddRoute(outport, true);
+            else
+            {
+                if (!inMidiList.Contains(inport))
+                {
+                    inMidiList.Add(inport);
+                    im[inport].InitInputDevice();
+                    //if (MidiRoutes[i].AllRoutes)
+                    {
+                        im[inport].inMIDI.SysCommonMessageReceived += HandleSysCommonMessageReceived;
+                        im[inport].inMIDI.ChannelMessageReceived += HandleChannelMessageReceived;
+                        im[inport].inMIDI.SysExMessageReceived += HandleSysExMessageReceived;
+                        im[inport].inMIDI.SysRealtimeMessageReceived += HandleSysRealtimeMessageReceived;
+                        im[inport].inMIDI.Error += new EventHandler<Sanford.Multimedia.ErrorEventArgs>(inDevice_Error);
+                    }
+                }
+
+                if (MidiRoutes[inport] == null)
+                {
+                    MidiRoutes[inport] = new Routes();
+                }
+                MidiRoutes[inport].AddRoute(outport, true);
+            }
+
+            dirty = true;
         }
 
         private static void PrintRoutes()
         {
-            if(inMidiList.Count <= 0)
+            if(inMidiList.Count <= 0 && ump == null)
             {
                 Console.WriteLine("No routes defined, use A to add a route.");
                 return;
+            }
+
+            if(ump != null)
+            {
+                Console.WriteLine("UDP Port {0} - {1}", ump.UDPInPort, ump.OutputUdp2Midi.Name);
             }
 
             foreach(int i in inMidiList)
@@ -424,10 +480,7 @@ namespace RouteMidi
                         Console.WriteLine("Unable to convert source port " + OutPortStr);
                     }
 
-                    MidiOutCaps caps = OutputDevice.GetDeviceCapabilities(OutPort);
-
-                    OutputUdp2Midi = new OutputMidi(caps.name, OutPort);
-                    OutputUdp2Midi.InitOutputDevice();
+                    AddRoute(-1, OutPort);
                 }
                 else if(arg[0] == 'd' || arg[0] == 'D')
                 {
@@ -483,21 +536,7 @@ namespace RouteMidi
                         Console.WriteLine("Unable to convert destination port " + OutPortStr);
                     }
 
-                    if (!inMidiList.Contains(InPort))
-                    {
-                        inMidiList.Add(InPort);
-                    }
-
-                    if (!outMidiList.Contains(OutPort))
-                    {
-                        outMidiList.Add(OutPort);
-                    }
-
-                    if (MidiRoutes[InPort] == null)
-                    {
-                        MidiRoutes[InPort] = new Routes();
-                    }
-                    MidiRoutes[InPort].AddRoute(OutPort, AllMessages);
+                    AddRoute(InPort, OutPort);
                 }
             }
 
@@ -539,11 +578,14 @@ namespace RouteMidi
                                 }
                                 else
                                 {
-                                    UDPInPort = UdpPort;
-                                    MidiOutCaps caps = OutputDevice.GetDeviceCapabilities(OutPort);
-
-                                    OutputUdp2Midi = new OutputMidi(caps.name, OutPort);
-                                    OutputUdp2Midi.InitOutputDevice();
+                                    if(UdpPort > MAXMIDIPORTS)
+                                    {
+                                        AddRoute(UdpPort, OutPort);
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("UDP Port must be greater than {0}", MAXMIDIPORTS);
+                                    }
                                 };
                             }
                         }
@@ -655,84 +697,6 @@ namespace RouteMidi
             if (debug)
             {
                 Console.WriteLine("SysRealTime: " + e.Message.Message + " " + e.Message.SysRealtimeType + " " + e.Message.MessageType);
-            }
-        }
-
-        static private void ProcessBytes(Byte[] receiveBytes)
-        {
-            Console.Write("Data: ");
-            foreach (Byte b in receiveBytes)
-            {
-                Console.Write("{0:X} ", b);
-            }
-
-            if (receiveBytes[0] < 0xF0)
-            {
-                if (debug)
-                {
-                    Console.WriteLine("Channel ");
-                }
-                OutputUdp2Midi.PlayNoteFromBuffer(receiveBytes, receiveBytes.Length);
-            }
-            else
-            {
-                if (receiveBytes[0] < 0xF8)
-                {
-                    if (receiveBytes[0] == 0xF0)
-                    {
-                        if (debug)
-                        {
-                            Console.WriteLine("SysEx ");
-                        }
-                        OutputUdp2Midi.PlaySysExFromBuffer(receiveBytes);
-                    }
-                    else
-                    {
-                        // Control Message
-                        Console.WriteLine("Control Message ");
-                    }
-                }
-                else
-                {
-                    // System Real-Time Message
-                    Console.WriteLine("System Real-Time Message ");
-                }
-            }
-        }
-
-        static private void ipv4_udpListener()
-        {
-            //IPEndPoint object will allow us to read datagrams sent from any source.
-            IPEndPoint RemoteIpEndPoint = new IPEndPoint(IPAddress.Any, 0);
-            bool done = false;
-
-            while (!done)
-            {
-                //listener.
-                // Blocks until a message returns on this socket from a remote host.
-                Byte[] receiveBytes = ipv4_listener.Receive(ref RemoteIpEndPoint);
-                if(receiveBytes.Length >= 0)
-                {
-                    ProcessBytes(receiveBytes);
-                }
-            }
-        }
-
-        static private void ipv6_udpListener()
-        {
-            //IPEndPoint object will allow us to read datagrams sent from any source.
-            IPEndPoint RemoteIpEndPoint = new IPEndPoint(IPAddress.Any, 0);
-            bool done = false;
-
-            while (!done)
-            {
-                //listener.
-                // Blocks until a message returns on this socket from a remote host.
-                Byte[] receiveBytes = ipv6_listener.Receive(ref RemoteIpEndPoint);
-                if (receiveBytes.Length >= 0)
-                {
-                    ProcessBytes(receiveBytes);
-                }
             }
         }
     }

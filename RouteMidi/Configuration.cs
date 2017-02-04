@@ -10,7 +10,6 @@ namespace RouteMidi
     public class MidiConfigurationsSchema
     {
         public string ConfigurationName;
-        //public List<string> Configurations = new List<string>();
         public List<string> InPorts = new List<string>();
         public List<string> OutPorts = new List<string>();
         public List<List<int>> Routes = new List<List<int>>();
@@ -139,11 +138,18 @@ namespace RouteMidi
 
         public void WriteRouteConfig(string Name, Routes[] inroutes, InputMidi[] im, OutputMidi[] om)
         {
+            if(inroutes.Length <= 0)
+            {
+                Console.WriteLine("Can't save configuration with out routes defined.");
+                return;
+            }
+
             MidiConfigurationsSchema record = Configurations.Find(r => r.ConfigurationName == Name);
             if(record == null)
             {
                 record = new MidiConfigurationsSchema();
                 record.ConfigurationName = Name;
+                Configurations.Add(record);
             }
 
             for (int n = 0; n < InputMidi.Count; n++)
@@ -168,7 +174,6 @@ namespace RouteMidi
                     record.Routes.Add(rts);
                 }
             }
-            Configurations.Add(record);
         }
 
         internal bool ConfigExists(string Name)

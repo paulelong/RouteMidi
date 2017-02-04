@@ -87,7 +87,7 @@ namespace RouteMidi
 
         internal void StartRecording()
         {
-            inMIDI.StartRecording() ;
+            inMIDI.StartRecording();
         }
 
         internal void StopRecording()
