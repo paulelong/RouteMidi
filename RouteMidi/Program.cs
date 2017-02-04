@@ -28,7 +28,7 @@ namespace RouteMidi
         static private SynchronizationContext context;
 
         // UDP Stuff
-        static List<UDPMidiPort> ump = new List<UDPMidiPort>();
+        static UdpMidiPortList umpl = new UdpMidiPortList();
 
  //       private static int UDPInPort = 9000;
 
@@ -65,14 +65,11 @@ namespace RouteMidi
 
                         StopAllRecording();
 
+                        umpl.StopListeners();
+
                         Console.WriteLine("Midi Stopped ...");
 
                         CloseAllMidiPorts();
-
-                        foreach (UDPMidiPort u in ump)
-                        {
-                            u.StopListeners();
-                        }
                     }
                     else
                     {
@@ -407,7 +404,7 @@ namespace RouteMidi
             {
                 MidiOutCaps caps = OutputDevice.GetDeviceCapabilities(outport);                
 
-                ump = new UDPMidiPort(inport, om[outport]);
+                umpl.Add(inport, om[outport]);
             }
             else
             {
@@ -437,15 +434,15 @@ namespace RouteMidi
 
         private static void PrintRoutes()
         {
-            if(inMidiList.Count <= 0 && ump == null)
+            if(inMidiList.Count <= 0 && umpl.Count <= 0)
             {
                 Console.WriteLine("No routes defined, use A to add a route.");
                 return;
             }
 
-            if(ump != null)
+            if(umpl.Count > 0)
             {
-                Console.WriteLine("UDP Port {0} - {1}", ump.UDPInPort, ump.OutputUdp2Midi.Name);
+                umpl.ListRoutes();
             }
 
             foreach(int i in inMidiList)

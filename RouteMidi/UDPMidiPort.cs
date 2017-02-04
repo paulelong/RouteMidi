@@ -14,16 +14,33 @@ namespace RouteMidi
 
         ~UdpMidiPortList()
         {
-            foreach(UDPMidiPort u in list)
+        }
+
+        public void StopListeners()
+        {
+            foreach (UDPMidiPort u in list)
             {
                 u.StopListeners();
             }
+        }
+
+        public int Count
+        {
+            get { return list.Count; }
         }
 
         public void Add(int port, OutputMidi midiport)
         {
             UDPMidiPort u = new UDPMidiPort(port, midiport);
             list.Add(u);
+        }
+
+        public void ListRoutes()
+        {
+            foreach(UDPMidiPort ump in list)
+            {
+                Console.WriteLine("Port {0} -> {1}", ump.UDPInPort, ump.OutputUdp2Midi.Name);
+            }
         }
     }
 
