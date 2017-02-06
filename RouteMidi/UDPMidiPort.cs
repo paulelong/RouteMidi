@@ -8,12 +8,20 @@ using System.Net.Sockets;
 
 namespace RouteMidi
 {
-    class UdpMidiPortList
+    public class UdpMidiPortList
     {
-        List<UDPMidiPort> list = new List<UDPMidiPort>();
+       public  List<UDPMidiPort> list = new List<UDPMidiPort>();
 
         ~UdpMidiPortList()
         {
+        }
+
+        public void Debug(bool mode)
+        {
+            foreach (UDPMidiPort u in list)
+            {
+                u.debug = mode;
+            }
         }
 
         public void StopListeners()

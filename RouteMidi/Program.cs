@@ -166,6 +166,8 @@ namespace RouteMidi
                 Console.WriteLine("Monitor debug mode on");
                 debug = true;
             }
+
+            umpl.Debug(debug);
         }
 
         private static void UpdateConfigurationName()
@@ -251,7 +253,7 @@ namespace RouteMidi
         {
             if(CurrentConfigurationName != "")
             {
-                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
+                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om, umpl);
                 mc.Save();
                 dirty = false;
             }
@@ -317,6 +319,7 @@ namespace RouteMidi
         {
             foreach (int i in inMidiList)
             {
+                Console.WriteLine("Starting {0}", i); 
                 im[i].StartRecording();
             }
         }
@@ -477,7 +480,7 @@ namespace RouteMidi
                         Console.WriteLine("Unable to convert source port " + OutPortStr);
                     }
 
-                    AddRoute(-1, OutPort);
+                    AddRoute(9000, OutPort);
                 }
                 else if(arg[0] == 'd' || arg[0] == 'D')
                 {
@@ -598,22 +601,7 @@ namespace RouteMidi
                             else
                             {
                                 Console.Write("Port range, " + InPort.ToString() + " to " + OutPort.ToString() + " router for ");
-
-                                if (!inMidiList.Contains(InPort))
-                                {
-                                    inMidiList.Add(InPort);
-                                }
-
-                                if (!outMidiList.Contains(OutPort))
-                                {
-                                    outMidiList.Add(OutPort);
-                                }
-
-                                if (MidiRoutes[InPort] == null)
-                                {
-                                    MidiRoutes[InPort] = new Routes();
-                                }
-                                MidiRoutes[InPort].AddRoute(OutPort, true);
+                                AddRoute(InPort, OutPort);
                             }
                         }
                     }

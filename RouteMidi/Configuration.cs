@@ -136,7 +136,7 @@ namespace RouteMidi
             }
         }
 
-        public void WriteRouteConfig(string Name, Routes[] inroutes, InputMidi[] im, OutputMidi[] om)
+        public void WriteRouteConfig(string Name, Routes[] inroutes, InputMidi[] im, OutputMidi[] om, UdpMidiPortList umpl)
         {
             if(inroutes.Length <= 0)
             {
@@ -173,6 +173,11 @@ namespace RouteMidi
                     }
                     record.Routes.Add(rts);
                 }
+            }
+
+            foreach(UDPMidiPort ump in umpl.list)
+            {
+
             }
         }
 
