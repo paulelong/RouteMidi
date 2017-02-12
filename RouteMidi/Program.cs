@@ -20,7 +20,7 @@ namespace RouteMidi
         static private InputMidi[] im = new InputMidi[MAXMIDIPORTS];
         static private OutputMidi[] om = new OutputMidi[MAXMIDIPORTS];
 
-        static private Routes[] MidiRoutes = new Routes[MAXMIDIPORTS];
+        static private Route[] MidiRoutes = new Route[MAXMIDIPORTS];
 
         static private List<int> outMidiList = new List<int>();
         static private List<int> inMidiList = new List<int>();
@@ -30,12 +30,10 @@ namespace RouteMidi
         // UDP Stuff
         static UdpMidiPortList umpl = new UdpMidiPortList();
 
- //       private static int UDPInPort = 9000;
-
         // Global stuff
-        static private bool debug = false;
-        static MidiConfig mc = new MidiConfig();
         static string CurrentConfigurationName = "default";
+        static private bool debug = false;
+        static MidiConfig mc = new MidiConfig(CurrentConfigurationName);
         private static bool dirty = false;
 
         static void Main(string[] args)
@@ -174,7 +172,7 @@ namespace RouteMidi
         {
             Console.WriteLine("Current name is {0}", CurrentConfigurationName);
             Console.Write("New name: ");
-            CurrentConfigurationName = Console.ReadLine();
+            mc.SetDefault(Console.ReadLine());
         }
 
         private static void ShowHelp()
@@ -224,7 +222,7 @@ namespace RouteMidi
         {
             if(dirty)
             {
-                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om);
+                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om, umpl);
                 dirty = false;
             }
 
@@ -233,7 +231,7 @@ namespace RouteMidi
             if (!mc.ConfigExists(in_str))
             {
                 CurrentConfigurationName = in_str;
-                foreach(Routes r in MidiRoutes)
+                foreach(Route r in MidiRoutes)
                 {
                     if(r != null)
                     {
@@ -241,7 +239,7 @@ namespace RouteMidi
                     }
                 }
 
-                mc.WriteRouteConfig(in_str, MidiRoutes, im, om);
+                mc.WriteRouteConfig(in_str, MidiRoutes, im, om, umpl);
             }
             else
             {
@@ -251,7 +249,7 @@ namespace RouteMidi
 
         private static void SaveConfig()
         {
-            if(CurrentConfigurationName != "")
+            if(mc.GetDefault() != "")
             {
                 mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om, umpl);
                 mc.Save();
@@ -294,70 +292,70 @@ namespace RouteMidi
             MidiRoutes[routenum].RemoveRoutes();
         }
 
-        private static void CloseAllMidiPorts()
-        {
-            foreach (int i in inMidiList)
+            private static void CloseAllMidiPorts()
             {
-                im[i].Close();
-            }
-
-            foreach (int i in outMidiList)
-            {
-                om[i].Close();
-            }
-        }
-
-        private static void StopAllRecording()
-        {
-            foreach (int i in inMidiList)
-            {
-                im[i].StopRecording();
-            }
-        }
-
-        private static void StartAllRecording()
-        {
-            foreach (int i in inMidiList)
-            {
-                Console.WriteLine("Starting {0}", i); 
-                im[i].StartRecording();
-            }
-        }
-
-        private static bool InitMidiPorts()
-        {
-            try
-            {
-                context = SynchronizationContext.Current;
-                /*
-                //foreach (int i in inMidiList)
-                for(int i = 0; i < InputMidi.Count; i++)
+                foreach (int i in inMidiList)
                 {
-                    im[i].InitInputDevice();
-                    //if (MidiRoutes[i].AllRoutes)
+                    im[i].Close();
+                }
+
+                foreach (int i in outMidiList)
+                {
+                    om[i].Close();
+                }
+            }
+
+            private static void StopAllRecording()
+            {
+                foreach (int i in inMidiList)
+                {
+                    im[i].StopRecording();
+                }
+            }
+
+            private static void StartAllRecording()
+            {
+                foreach (int i in inMidiList)
+                {
+                    Console.WriteLine("Starting {0}", i); 
+                    im[i].StartRecording();
+                }
+            }
+
+            private static bool InitMidiPorts()
+            {
+                try
+                {
+                    context = SynchronizationContext.Current;
+                    /*
+                    //foreach (int i in inMidiList)
+                    for(int i = 0; i < InputMidi.Count; i++)
                     {
-                        im[i].inMIDI.SysCommonMessageReceived += HandleSysCommonMessageReceived;
-                        im[i].inMIDI.ChannelMessageReceived += HandleChannelMessageReceived;
-                        im[i].inMIDI.SysExMessageReceived += HandleSysExMessageReceived;
-                        im[i].inMIDI.SysRealtimeMessageReceived += HandleSysRealtimeMessageReceived;
-                        im[i].inMIDI.Error += new EventHandler<Sanford.Multimedia.ErrorEventArgs>(inDevice_Error);
+                        im[i].InitInputDevice();
+                        //if (MidiRoutes[i].AllRoutes)
+                        {
+                            im[i].inMIDI.SysCommonMessageReceived += HandleSysCommonMessageReceived;
+                            im[i].inMIDI.ChannelMessageReceived += HandleChannelMessageReceived;
+                            im[i].inMIDI.SysExMessageReceived += HandleSysExMessageReceived;
+                            im[i].inMIDI.SysRealtimeMessageReceived += HandleSysRealtimeMessageReceived;
+                            im[i].inMIDI.Error += new EventHandler<Sanford.Multimedia.ErrorEventArgs>(inDevice_Error);
+                        }
                     }
-                }
 
-                //                foreach (int i in outMidiList)
-                for (int i = 0; i < OutputMidi.Count; i++)
-                {
-                    om[i].InitOutputDevice();
+                    //                foreach (int i in outMidiList)
+                    for (int i = 0; i < OutputMidi.Count; i++)
+                    {
+                        om[i].InitOutputDevice();
+                    }
+                    */
+                    return true;
                 }
-                */
-                return true;
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Error: " + ex.Message);
+                    return false;
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error: " + ex.Message);
-                return false;
-            }
-        }
 
         static private void ManualAddRoute()
         {
@@ -427,7 +425,7 @@ namespace RouteMidi
 
                 if (MidiRoutes[inport] == null)
                 {
-                    MidiRoutes[inport] = new Routes();
+                    MidiRoutes[inport] = new Route();
                 }
                 MidiRoutes[inport].AddRoute(outport, true);
             }

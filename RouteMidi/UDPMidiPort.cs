@@ -39,27 +39,43 @@ namespace RouteMidi
 
         public void Add(int port, OutputMidi midiport)
         {
-            UDPMidiPort u = new UDPMidiPort(port, midiport);
-            list.Add(u);
+            UDPMidiPort u = list.Find(x => x.UDPInPort == port);
+            if(u != null)
+            {
+                if(u.oml.Find(x => x.Name == midiport.Name) == null)
+                {
+                    u.oml.Add(midiport);
+                }
+            }
+            else
+            {
+                list.Add(new UDPMidiPort(port, midiport));
+            }
         }
 
         public void ListRoutes()
         {
             foreach(UDPMidiPort ump in list)
             {
-                Console.WriteLine("Port {0} -> {1}", ump.UDPInPort, ump.OutputUdp2Midi.Name);
+                Console.Write("Port {0} -> ");
+                foreach (OutputMidi o in ump.oml)
+                {
+                    Console.Write("{0}, ", o.Name);
+                }
+                Console.WriteLine();
             }
         }
     }
 
-    class UDPMidiPort
+    public class UDPMidiPort
     {
         // UDP Stuff
         UdpClient ipv4_listener;
         UdpClient ipv6_listener;
         AutoResetEvent waitHandle = new AutoResetEvent(false);
         public int UDPInPort = 9000;
-        public OutputMidi OutputUdp2Midi;
+        public List<OutputMidi> oml = new List<OutputMidi>();
+        //public OutputMidi OutputUdp2Midi;
         public bool debug = false;
 
         Thread ipv4_thread; 
@@ -68,7 +84,8 @@ namespace RouteMidi
         public UDPMidiPort(int port, OutputMidi midiport)
         {
             UDPInPort = port;
-            OutputUdp2Midi = midiport;
+            //OutputUdp2Midi = midiport;
+            oml.Add(midiport);
 
             ipv4_listener = new UdpClient(UDPInPort, AddressFamily.InterNetwork);
             ipv6_listener = new UdpClient(UDPInPort, AddressFamily.InterNetworkV6);
@@ -148,7 +165,11 @@ namespace RouteMidi
                 {
                     Console.WriteLine("Channel ");
                 }
-                OutputUdp2Midi.PlayNoteFromBuffer(receiveBytes, receiveBytes.Length);
+                foreach(OutputMidi om in oml)
+                {
+                    om.PlayNoteFromBuffer(receiveBytes, receiveBytes.Length);
+                }
+//                OutputUdp2Midi.PlayNoteFromBuffer(receiveBytes, receiveBytes.Length);
             }
             else
             {
@@ -160,7 +181,11 @@ namespace RouteMidi
                         {
                             Console.WriteLine("SysEx ");
                         }
-                        OutputUdp2Midi.PlaySysExFromBuffer(receiveBytes);
+
+                        foreach (OutputMidi om in oml)
+                        {
+                            om.PlaySysExFromBuffer(receiveBytes);
+                        }
                     }
                     else
                     {
