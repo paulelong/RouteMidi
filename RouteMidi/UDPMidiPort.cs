@@ -10,7 +10,7 @@ namespace RouteMidi
 {
     public class UdpMidiPortList
     {
-       public  List<UDPMidiPort> list = new List<UDPMidiPort>();
+        public  List<UDPMidiPort> list = new List<UDPMidiPort>();
 
         ~UdpMidiPortList()
         {
@@ -57,7 +57,7 @@ namespace RouteMidi
         {
             foreach(UDPMidiPort ump in list)
             {
-                Console.Write("Port {0} -> ");
+                Console.Write("Port {0} -> ", ump.UDPInPort);
                 foreach (OutputMidi o in ump.oml)
                 {
                     Console.Write("{0}, ", o.Name);

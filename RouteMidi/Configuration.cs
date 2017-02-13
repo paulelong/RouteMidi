@@ -90,12 +90,12 @@ namespace RouteMidi
             }
         }
 
-        public void ReadRouteConfig(string Name, Route[] outroutes, InputMidi[] im, OutputMidi[] om)
+        public void ReadRouteConfig(string Name, Routes midiRoutes)
         {
             MidiConfigurationsSchema record = Configurations.Find(r => r.ConfigurationName == Name);
             if (record != null)
             {
-                ReadRouteRecord(record, outroutes, im, om);
+                ReadRouteRecord(record, midiRoutes);
             }
             else
             {
@@ -103,12 +103,12 @@ namespace RouteMidi
             }
         }
 
-        public void ReadRouteConfigDefault(Route[] outroutes, InputMidi[] im, OutputMidi[] om)
+        public void ReadRouteConfigDefault(Routes midiRoutes)
         {
             MidiConfigurationsSchema record = Configurations.Find(r => r.ConfigurationName == rms.DefaultConfig);
             if(record != null)
             {
-                ReadRouteRecord(record, outroutes, im, om);
+                ReadRouteRecord(record, midiRoutes);
             }
             else
             {
@@ -116,14 +116,14 @@ namespace RouteMidi
             }
         }
 
-        public void ReadRouteConfigByNumber(int number, Route[] outroutes, InputMidi[] im, OutputMidi[] om)
+        public void ReadRouteConfigByNumber(int number, Routes midiRoutes)
         {
             if(number < Configurations.Count && number >= 1)
             {
                 MidiConfigurationsSchema record = Configurations[number - 1];
                 if (record != null)
                 {
-                    ReadRouteRecord(record, outroutes, im, om);
+                    ReadRouteRecord(record, midiRoutes);
                 }
                 else
                 {
@@ -136,36 +136,29 @@ namespace RouteMidi
             }
         }
 
-        private void ReadRouteRecord(MidiConfigurationsSchema record, Route[] outroutes, InputMidi[] im, OutputMidi[] om)
+        private void ReadRouteRecord(MidiConfigurationsSchema record, Routes midiRoutes)
         {
-            // Clear all the routes first
-            for(int n = 0; n < outroutes.Length; n++)
-            {
-                if(outroutes[n] != null)
-                {
-                    outroutes[n].RemoveRoutes();
-                }
-            }
+            midiRoutes.ResetRoutes();
+
             for (int n = 0; n < record.InPorts.Count; n++)
             {
                 // check if the input is available now
-                int inport = InputMidi.MapName(im, record.InPorts[n]);
+                int inport = midiRoutes.FindInputPort(record.InPorts[n]);
                 if (inport >= 0)
                 {
                     if(record.Routes.Count > 0)
                     {
-                        foreach (int i in record.Routes[n])
+                        foreach (int m in record.Routes[n])
                         {
-                            int outport = OutputMidi.MapName(om, record.OutPorts[i]);
+                            int outport = midiRoutes.FindOutputPort(record.OutPorts[m]);
                             if (outport >= 0)
                             {
-                                outroutes[inport].AddRoute(outport, true);
+                                midiRoutes.AddRoute(inport, outport);
                             }
                             else
                             {
-                                Console.WriteLine("Could not find outport {0} in current midi setup.", record.OutPorts[i]);
+                                Console.WriteLine("Could not find outport {0} in current midi setup.", record.OutPorts[m]);
                             }
-
                         }
                     }
                     else
@@ -178,11 +171,30 @@ namespace RouteMidi
                     Console.WriteLine("Unalble to load configuration because {0} doesn't exist in current MIDI setup.", record.InPorts[n]);
                 }
             }
+
+            // Configure UDP ports
+            int i = 0;
+            foreach(int inport in record.UdpPorts)
+            {
+                foreach(int op in record.UdpRoutes[i])
+                {
+                    int outport = midiRoutes.FindOutputPort(record.OutPorts[op]);
+                    if (outport >= 0)
+                    {
+                        midiRoutes.AddRoute(inport, outport);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Could not find outport {0} in current midi setup.", record.OutPorts[i]);
+                    }
+                }
+                i++;
+            }
         }
 
-        public void WriteRouteConfig(string Name, Route[] inroutes, InputMidi[] im, OutputMidi[] om, UdpMidiPortList umpl)
+        public void WriteRouteConfig(string Name, Routes midiRoutes)
         {
-            if(inroutes.Length <= 0)
+            if(midiRoutes.Count <= 0)
             {
                 Console.WriteLine("Can't save configuration with out routes defined.");
                 return;
@@ -198,33 +210,25 @@ namespace RouteMidi
 
             for (int n = 0; n < InputMidi.Count; n++)
             {
-                record.InPorts.Add(im[n].Name);
+                record.InPorts.Add(midiRoutes.GetInportName(n));
             }
 
             for (int n = 0; n < OutputMidi.Count; n++)
             {
-                record.OutPorts.Add(om[n].Name);
+                record.OutPorts.Add(midiRoutes.GetOutportName(n));
             }
 
             for (int n = 0; n < InputMidi.Count; n++)
             {
-                List<int> rts = new List<int>();
-                if(inroutes[n] != null)
-                {
-                    foreach (int m in inroutes[n].GetRoutes())
-                    {
-                        rts.Add(m);
-                    }
-                    record.Routes.Add(rts);
-                }
+                record.Routes.Add(midiRoutes.GetRoute(n));
             }
 
-            foreach(UDPMidiPort ump in umpl.list)
+            foreach(UDPMidiPort ump in midiRoutes.midiPortList.list)
             {
                 List<int> opl = new List<int>();
                 foreach(OutputMidi o in ump.oml)
                 {
-                    opl.Add(FindOutputName(om, o));
+                    opl.Add(midiRoutes.FindOutputPort(o.Name));
                 }
 
                 record.UdpPorts.Add(ump.UDPInPort);
@@ -264,10 +268,20 @@ namespace RouteMidi
             }
         }
 
-        internal void ReadDefaultConfig(Route[] outroutes, InputMidi[] im, OutputMidi[] om)
+        public bool ValidateConfigurationNumber(int num)
+        {
+            if(num > 0 && num <= Configurations.Count)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        internal void ReadDefaultConfig(Routes midiRoutes)
         {
             MidiConfigurationsSchema record = Configurations[0];
-            ReadRouteRecord(record, outroutes, im, om);
+            ReadRouteRecord(record, midiRoutes);
         }
     }
 }

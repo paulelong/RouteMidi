@@ -14,27 +14,29 @@ namespace RouteMidi
 {
     class Program
     {
-        const int MINMIDIPORT = 1025;
-        const uint MAXMIDIPORTS = 64;
+        //const int MINMIDIPORT = 1025;
+        //const uint MAXMIDIPORTS = 64;
 
-        static private InputMidi[] im = new InputMidi[MAXMIDIPORTS];
-        static private OutputMidi[] om = new OutputMidi[MAXMIDIPORTS];
+        //static private InputMidi[] im = new InputMidi[MAXMIDIPORTS];
+        //static private OutputMidi[] om = new OutputMidi[MAXMIDIPORTS];
 
-        static private Route[] MidiRoutes = new Route[MAXMIDIPORTS];
+        //static private Route[] MidiRoutes = new Route[MAXMIDIPORTS];
 
-        static private List<int> outMidiList = new List<int>();
-        static private List<int> inMidiList = new List<int>();
+        //static private List<int> outMidiList = new List<int>();
+        //static private List<int> inMidiList = new List<int>();
 
-        static private SynchronizationContext context;
+        //static private SynchronizationContext context;
 
-        // UDP Stuff
-        static UdpMidiPortList umpl = new UdpMidiPortList();
+        //// UDP Stuff
+        //static UdpMidiPortList umpl = new UdpMidiPortList();
+
+        static Routes midiRoutes = new Routes();
 
         // Global stuff
         static string CurrentConfigurationName = "default";
         static private bool debug = false;
         static MidiConfig mc = new MidiConfig(CurrentConfigurationName);
-        private static bool dirty = false;
+        //private static bool dirty = false;
 
         static void Main(string[] args)
         {
@@ -44,30 +46,22 @@ namespace RouteMidi
             }
             else
             {
-                GetMidiInfo();
+                midiRoutes.GetMidiInfo();
                 Console.WriteLine("Route Midi initialized.");
                 ListMidiInfo();
 
                 if (ParseCommandLine(args))
                 {
                     mc.Load();
-                    mc.ReadRouteConfigDefault(MidiRoutes, im, om);
+                    mc.ReadRouteConfigDefault(midiRoutes);
 
-                    if (InitMidiPorts())
+                    if (midiRoutes.InitMidiPorts())
                     {
-                        StartAllRecording();
+                        midiRoutes.StartAllRecording();
 
                         ProcessCommands();
 
-                        Console.WriteLine("Stopping Midi...");
-
-                        StopAllRecording();
-
-                        umpl.StopListeners();
-
-                        Console.WriteLine("Midi Stopped ...");
-
-                        CloseAllMidiPorts();
+                        midiRoutes.Shutdown();
                     }
                     else
                     {
@@ -100,13 +94,13 @@ namespace RouteMidi
                         ListMidiInfo();
                         break;
                     case ConsoleKey.I:
-                        InputMidi.PrintMidiList(im);
+                        midiRoutes.DisplayInputMidiPorts();
                         break;
                     case ConsoleKey.O:
-                        OutputMidi.PrintMidiList(om);
+                        midiRoutes.DisplayOutputMidiPorts();
                         break;
                     case ConsoleKey.R:
-                        PrintRoutes();
+                        midiRoutes.PrintRoutes();
                         break;
                     case ConsoleKey.A:
                         ManualAddRoute();
@@ -127,7 +121,7 @@ namespace RouteMidi
                         PickConfiguration();
                         break;
                     case ConsoleKey.C:
-                        DisplayConfigurations();
+                        mc.DisplayConfigurations();
                         break;
                     case ConsoleKey.U:
                         UpdateConfigurationName();
@@ -154,18 +148,18 @@ namespace RouteMidi
 
         private static void SwapDebugMode()
         {
-            if (debug)
+            if (midiRoutes.Debug)
             {
                 Console.WriteLine("Monitor debug mode off");
-                debug = false;
+                midiRoutes.Debug = false;
             }
             else
             {
                 Console.WriteLine("Monitor debug mode on");
-                debug = true;
+                midiRoutes.Debug = true;
             }
 
-            umpl.Debug(debug);
+//            umpl.Debug(debug);
         }
 
         private static void UpdateConfigurationName()
@@ -204,26 +198,26 @@ namespace RouteMidi
 
         private static void PickConfiguration()
         {
-            DisplayConfigurations();
+            mc.DisplayConfigurations(); ;
             Console.Write("Pick which configuration: ");
             string in_str = Console.ReadLine();
             int confignum;
 
-            if (!int.TryParse(in_str, out confignum) || confignum < 0 || confignum >= MidiRoutes.Length)
+            if (!int.TryParse(in_str, out confignum) || confignum < 0 || !mc.ValidateConfigurationNumber(confignum))
             {
                 Console.WriteLine("Port needs to be an integer and in the valid range of routes above.");
                 return;
             }
 
-            mc.ReadRouteConfigByNumber(confignum, MidiRoutes, im, om);
+            mc.ReadRouteConfigByNumber(confignum, midiRoutes);
         }
 
         private static void NewConfgiruation()
         {
-            if(dirty)
+            if(midiRoutes.IsDirty)
             {
-                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om, umpl);
-                dirty = false;
+                mc.WriteRouteConfig(CurrentConfigurationName, midiRoutes);
+                midiRoutes.IsDirty = false;
             }
 
             Console.Write("Configuraiton Name: ");
@@ -231,15 +225,9 @@ namespace RouteMidi
             if (!mc.ConfigExists(in_str))
             {
                 CurrentConfigurationName = in_str;
-                foreach(Route r in MidiRoutes)
-                {
-                    if(r != null)
-                    {
-                        r.RemoveRoutes();
-                    }
-                }
+                midiRoutes.ResetRoutes();
 
-                mc.WriteRouteConfig(in_str, MidiRoutes, im, om, umpl);
+                mc.WriteRouteConfig(in_str, midiRoutes);
             }
             else
             {
@@ -251,9 +239,9 @@ namespace RouteMidi
         {
             if(mc.GetDefault() != "")
             {
-                mc.WriteRouteConfig(CurrentConfigurationName, MidiRoutes, im, om, umpl);
+                mc.WriteRouteConfig(CurrentConfigurationName, midiRoutes);
                 mc.Save();
-                dirty = false;
+                midiRoutes.IsDirty = false;
             }
             else
             {
@@ -264,98 +252,31 @@ namespace RouteMidi
         private static void LoadConfig()
         {
             mc.Load();
-            mc.ReadDefaultConfig(MidiRoutes, im, om);
+            mc.ReadRouteConfigDefault(midiRoutes);
         }
 
         private static void ListMidiInfo()
         {
-            InputMidi.PrintMidiList(im);
+            midiRoutes.DisplayInputMidiPorts();
             Console.WriteLine();
-            OutputMidi.PrintMidiList(om);
+            midiRoutes.DisplayOutputMidiPorts();
             Console.WriteLine();
         }
 
         private static void ManualDeleteRoute()
         {
-            PrintRoutes();
+            midiRoutes.PrintRoutes();
             Console.Write("Delete which route: ");
             string in_str = Console.ReadLine();
 
             int routenum;
 
-            if (!int.TryParse(in_str, out routenum) || routenum < 0 || routenum >= MidiRoutes.Length)
+
+            if(!int.TryParse(in_str, out routenum) || !midiRoutes.RemoveRoutes(routenum))
             {
                 Console.WriteLine("Port needs to be an integer and in the valid range of routes above.");
-                return;
             }
-
-            MidiRoutes[routenum].RemoveRoutes();
         }
-
-            private static void CloseAllMidiPorts()
-            {
-                foreach (int i in inMidiList)
-                {
-                    im[i].Close();
-                }
-
-                foreach (int i in outMidiList)
-                {
-                    om[i].Close();
-                }
-            }
-
-            private static void StopAllRecording()
-            {
-                foreach (int i in inMidiList)
-                {
-                    im[i].StopRecording();
-                }
-            }
-
-            private static void StartAllRecording()
-            {
-                foreach (int i in inMidiList)
-                {
-                    Console.WriteLine("Starting {0}", i); 
-                    im[i].StartRecording();
-                }
-            }
-
-            private static bool InitMidiPorts()
-            {
-                try
-                {
-                    context = SynchronizationContext.Current;
-                    /*
-                    //foreach (int i in inMidiList)
-                    for(int i = 0; i < InputMidi.Count; i++)
-                    {
-                        im[i].InitInputDevice();
-                        //if (MidiRoutes[i].AllRoutes)
-                        {
-                            im[i].inMIDI.SysCommonMessageReceived += HandleSysCommonMessageReceived;
-                            im[i].inMIDI.ChannelMessageReceived += HandleChannelMessageReceived;
-                            im[i].inMIDI.SysExMessageReceived += HandleSysExMessageReceived;
-                            im[i].inMIDI.SysRealtimeMessageReceived += HandleSysRealtimeMessageReceived;
-                            im[i].inMIDI.Error += new EventHandler<Sanford.Multimedia.ErrorEventArgs>(inDevice_Error);
-                        }
-                    }
-
-                    //                foreach (int i in outMidiList)
-                    for (int i = 0; i < OutputMidi.Count; i++)
-                    {
-                        om[i].InitOutputDevice();
-                    }
-                    */
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Error: " + ex.Message);
-                    return false;
-                }
-            }
 
         static private void ManualAddRoute()
         {
@@ -378,87 +299,19 @@ namespace RouteMidi
                 return;
             }
 
-            if(inport >= InputMidi.Count && inport < MINMIDIPORT)
+            if (!midiRoutes.ValidateMidiInPort(inport))
             {
-                Console.WriteLine("No a valid in midi port");
+                Console.WriteLine("Not a valid in midi port");
                 return;
             }
 
-            if (outport >= OutputMidi.Count)
+            if (!midiRoutes.ValidateMidiOutPort(outport))
             {
-                Console.WriteLine("No a valid out midi port");
+                Console.WriteLine("Not a valid out midi port");
                 return;
             }
 
-            AddRoute(inport, outport);
-        }
-
-        private static void AddRoute(int inport, int outport)
-        {
-            if (!outMidiList.Contains(outport))
-            {
-                outMidiList.Add(outport);
-                om[outport].InitOutputDevice();
-            }
-
-            if (inport > MINMIDIPORT)
-            {
-                MidiOutCaps caps = OutputDevice.GetDeviceCapabilities(outport);                
-
-                umpl.Add(inport, om[outport]);
-            }
-            else
-            {
-                if (!inMidiList.Contains(inport))
-                {
-                    inMidiList.Add(inport);
-                    im[inport].InitInputDevice();
-                    //if (MidiRoutes[i].AllRoutes)
-                    {
-                        im[inport].inMIDI.SysCommonMessageReceived += HandleSysCommonMessageReceived;
-                        im[inport].inMIDI.ChannelMessageReceived += HandleChannelMessageReceived;
-                        im[inport].inMIDI.SysExMessageReceived += HandleSysExMessageReceived;
-                        im[inport].inMIDI.SysRealtimeMessageReceived += HandleSysRealtimeMessageReceived;
-                        im[inport].inMIDI.Error += new EventHandler<Sanford.Multimedia.ErrorEventArgs>(inDevice_Error);
-                    }
-                }
-
-                if (MidiRoutes[inport] == null)
-                {
-                    MidiRoutes[inport] = new Route();
-                }
-                MidiRoutes[inport].AddRoute(outport, true);
-            }
-
-            dirty = true;
-        }
-
-        private static void PrintRoutes()
-        {
-            if(inMidiList.Count <= 0 && umpl.Count <= 0)
-            {
-                Console.WriteLine("No routes defined, use A to add a route.");
-                return;
-            }
-
-            if(umpl.Count > 0)
-            {
-                umpl.ListRoutes();
-            }
-
-            foreach(int i in inMidiList)
-            {
-                List<int> outs = MidiRoutes[i].GetRoutes();
-                if(outs.Count > 0)
-                {
-                    Console.Write(i.ToString() + " - " + im[i].Name + " -> ");
-                    foreach(int o in outs)
-                    {
-                        Console.Write(om[o].Name + ",");
-                    }
-                    Console.WriteLine();
-                }
-            }
+            midiRoutes.AddRoute(inport, outport);
         }
 
         private static bool ParseCommandLine(string[] args)
@@ -478,7 +331,7 @@ namespace RouteMidi
                         Console.WriteLine("Unable to convert source port " + OutPortStr);
                     }
 
-                    AddRoute(9000, OutPort);
+                    midiRoutes.AddRoute(9000, OutPort);
                 }
                 else if(arg[0] == 'd' || arg[0] == 'D')
                 {
@@ -489,7 +342,7 @@ namespace RouteMidi
                 {
                     // File is included afterwards, just use that as the args.
                     string file = arg.Substring(1);
-                    if(!ParseFile(file))
+                    if(!midiRoutes.ParseFile(file))
                     {
                         Console.WriteLine("Error loading argument file.");
                         return false;
@@ -534,153 +387,12 @@ namespace RouteMidi
                         Console.WriteLine("Unable to convert destination port " + OutPortStr);
                     }
 
-                    AddRoute(InPort, OutPort);
+                    midiRoutes.AddRoute(InPort, OutPort);
                 }
             }
 
             return true;
         }
 
-        private static bool ParseFile(string file)
-        {
-            if(!File.Exists(file))
-            {
-                Console.WriteLine("Couldn't find input file " + file);
-                return false;
-            }
-
-            using (StreamReader fs = File.OpenText(file))
-            {
-                while(fs.Peek() >= 0)
-                {
-                    string line = fs.ReadLine();
-                    int n = line.IndexOf(',');
-                    if(n > 0)
-                    {
-                        string leftside = line.Substring(0, n);
-                        string rightside = line.Substring(n + 1);
-
-                        if(leftside[0] == '#')
-                        {
-                            int OutPort = OutputMidi.MapName(om, rightside);
-                            if (OutPort == -1 || OutPort >= om.Length)
-                            {
-                                Console.Write("Outport for UDP " + OutPort.ToString() + " is invalid for ");
-                            }
-                            else
-                            {
-                                int UdpPort;
-                                if (!int.TryParse(leftside.Substring(1), out UdpPort))
-                                {
-                                    Console.WriteLine("Unable to convert destination port " + leftside.Substring(1));
-                                }
-                                else
-                                {
-                                    if(UdpPort > MAXMIDIPORTS)
-                                    {
-                                        AddRoute(UdpPort, OutPort);
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine("UDP Port must be greater than {0}", MAXMIDIPORTS);
-                                    }
-                                };
-                            }
-                        }
-                        else
-                        {
-                            int InPort = InputMidi.MapName(im, leftside);
-                            int OutPort = OutputMidi.MapName(om, rightside);
-
-                            if(InPort == -1 || InPort >= im.Length || OutPort == -1 || OutPort >= om.Length)
-                            {
-                                Console.Write("Port range, " + InPort.ToString() + " to " + OutPort.ToString() + " is invalid for ");
-                            }
-                            else
-                            {
-                                Console.Write("Port range, " + InPort.ToString() + " to " + OutPort.ToString() + " router for ");
-                                AddRoute(InPort, OutPort);
-                            }
-                        }
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        private static void GetMidiInfo()
-        {
-            for (int i = 0; i < InputDevice.DeviceCount; i++)
-            {
-                MidiInCaps caps = InputDevice.GetDeviceCapabilities(i);
-                im[i] = new InputMidi(caps.name, i);
-            }
-
-            for (int i = 0; i < OutputDevice.DeviceCount; i++)
-            {
-                MidiOutCaps caps = OutputDevice.GetDeviceCapabilities(i);
-                om[i] = new OutputMidi(caps.name, i);
-            }
-        }
-
-        // Event handlers for Midi messages
-
-        /// <summary>
-        /// Event Handlers
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-
-        static private void inDevice_Error(object sender, Sanford.Multimedia.ErrorEventArgs e)
-        {
-            Console.WriteLine("ERROR! " + e.Error.Message);
-        }
-
-        static private void HandleSysCommonMessageReceived(object sender, SysCommonMessageEventArgs e)
-        {
-            InputDevice id = (InputDevice)sender;
-            MidiRoutes[id.DeviceID].SendMessages(om, e.Message);
-
-            if(debug)
-            {
-                Console.WriteLine("SysCom: " + e.Message.Message + " " + e.Message.Data1 + " " + e.Message.Data2);
-            }
-        }
-
-        static private void HandleChannelMessageReceived(object sender, ChannelMessageEventArgs e)
-        {
-            InputDevice id = (InputDevice)sender;
-            MidiRoutes[id.DeviceID].SendMessages(om, e.Message);
-            if (debug)
-            {
-                Console.WriteLine("Channel: " + e.Message.Message + " c:" + e.Message.Command + " d1:" + e.Message.Data1 + " d2:" + e.Message.Data2 + " mc:" + e.Message.MidiChannel + " mt:" + e.Message.MessageType);
-            }
-        }
-
-        static private void HandleSysExMessageReceived(object sender, SysExMessageEventArgs e)
-        {
-            InputDevice id = (InputDevice)sender;
-            MidiRoutes[id.DeviceID].SendMessages(om, e.Message);
-            if (debug)
-            {
-                Console.Write("SysEx: " + e.Message.SysExType + " ");
-                for(int i = 0; i < e.Message.Length; i++)
-                {
-                    Console.Write("{0:X} ", e.Message[i]);
-                }
-                Console.WriteLine();
-            }
-        }
-
-        static private void HandleSysRealtimeMessageReceived(object sender, SysRealtimeMessageEventArgs e)
-        {
-            InputDevice id = (InputDevice)sender;
-            MidiRoutes[id.DeviceID].SendMessages(om, e.Message);
-            if (debug)
-            {
-                Console.WriteLine("SysRealTime: " + e.Message.Message + " " + e.Message.SysRealtimeType + " " + e.Message.MessageType);
-            }
-        }
     }
 }
